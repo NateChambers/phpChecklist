@@ -5,6 +5,7 @@
 - Automatically creates database
 - Create checklist with randomized password for editing
 - Progress status bar
+- Edit checklist (requires checklist password)
 - Lock checklist (requires checklist password)
 - Reset checklist (requires checklist password)
 - Delete checklist (requires checklist password)
