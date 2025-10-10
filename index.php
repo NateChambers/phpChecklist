@@ -11,26 +11,6 @@ try {
     die("Database connection failed: " . $e->getMessage());
 }
 
-// Check if the locked column exists and add it if missing
-try {
-    $result = $pdo->query("PRAGMA table_info(checklists)");
-    $columns = $result->fetchAll(PDO::FETCH_ASSOC);
-    
-    $hasLockedColumn = false;
-    foreach ($columns as $column) {
-        if ($column['name'] === 'locked') {
-            $hasLockedColumn = true;
-            break;
-        }
-    }
-    
-    if (!$hasLockedColumn) {
-        $pdo->exec("ALTER TABLE checklists ADD COLUMN locked INTEGER DEFAULT 0");
-    }
-} catch (PDOException $e) {
-    // Table might not exist yet, which is fine
-}
-
 // Create table if it doesn't exist
 $pdo->exec("CREATE TABLE IF NOT EXISTS checklists (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
