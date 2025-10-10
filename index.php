@@ -41,6 +41,56 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS checklists (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )");
 
+// Handle edit request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_checklist') {
+    $checklist_id = (int)$_POST['checklist_id'];
+    $title = trim($_POST['title']);
+    $items_input = trim($_POST['items']);
+    $password = trim($_POST['password']);
+    
+    try {
+        // Verify password before editing
+        $stmt = $pdo->prepare("SELECT password FROM checklists WHERE id = ?");
+        $stmt->execute([$checklist_id]);
+        $checklist = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($checklist) {
+            if ($password === $checklist['password']) {
+                // Process items
+                $items_array = [];
+                if (!empty($items_input)) {
+                    $items_list = explode(',', $items_input);
+                    foreach ($items_list as $item) {
+                        $item_trimmed = trim($item);
+                        if (!empty($item_trimmed)) {
+                            $items_array[$item_trimmed] = 0;
+                        }
+                    }
+                }
+                
+                // Convert to JSON
+                $items_json = json_encode($items_array);
+                
+                // Update database
+                $stmt = $pdo->prepare("UPDATE checklists SET title = ?, items = ? WHERE id = ?");
+                $stmt->execute([$title, $items_json, $checklist_id]);
+                
+                header('Location: index.php?id=' . $checklist_id . '&message=Checklist+updated+successfully');
+                exit;
+            } else {
+                header('Location: index.php?id=' . $checklist_id . '&error=Invalid+password');
+                exit;
+            }
+        } else {
+            header('Location: index.php?error=Checklist+not+found');
+            exit;
+        }
+    } catch (PDOException $e) {
+        header('Location: index.php?error=Error+updating+checklist:' . urlencode($e->getMessage()));
+        exit;
+    }
+}
+
 // Handle lock/unlock request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'toggle_lock') {
     $checklist_id = (int)$_POST['checklist_id'];
@@ -245,6 +295,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['title']) && !isset($_
 
 // Check if we're viewing a specific checklist
 $viewing_checklist = null;
+$editing_checklist = null;
 if (isset($_GET['id'])) {
     $checklist_id = (int)$_GET['id'];
     try {
@@ -270,6 +321,12 @@ if (isset($_GET['id'])) {
             } else {
                 $viewing_checklist['completed'] = false;
                 $viewing_checklist['completion_percentage'] = 0;
+            }
+            
+            // If we're in edit mode, prepare the items for the form
+            if (isset($_GET['edit'])) {
+                $editing_checklist = $viewing_checklist;
+                $editing_checklist['items_string'] = implode(', ', array_keys($editing_checklist['items']));
             }
         }
     } catch (PDOException $e) {
@@ -302,7 +359,15 @@ if ($new_checklist_password && $viewing_checklist && $viewing_checklist['id'] ==
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo $viewing_checklist ? htmlspecialchars($viewing_checklist['title']) : 'Checklist Manager'; ?></title>
+    <title><?php 
+        if ($editing_checklist) {
+            echo 'Edit: ' . htmlspecialchars($editing_checklist['title']);
+        } elseif ($viewing_checklist) {
+            echo htmlspecialchars($viewing_checklist['title']);
+        } else {
+            echo 'Checklist Manager';
+        }
+    ?></title>
     <style>
         :root {
             --bg-primary: #1a1a1a;
@@ -319,6 +384,8 @@ if ($new_checklist_password && $viewing_checklist && $viewing_checklist['id'] ==
             --warning-hover: #e68900;
             --info-color: #2196F3;
             --info-hover: #0b7dda;
+            --edit-color: #9C27B0;
+            --edit-hover: #7B1FA2;
             --warning-bg: #332900;
             --warning-border: #665200;
             --warning-text: #ffd700;
@@ -354,6 +421,8 @@ if ($new_checklist_password && $viewing_checklist && $viewing_checklist['id'] ==
             --warning-hover: #e68900;
             --info-color: #2196F3;
             --info-hover: #0b7dda;
+            --edit-color: #9C27B0;
+            --edit-hover: #7B1FA2;
             --warning-bg: #fff3cd;
             --warning-border: #ffeaa7;
             --warning-text: #856404;
@@ -486,6 +555,14 @@ if ($new_checklist_password && $viewing_checklist && $viewing_checklist['id'] ==
         
         .btn-danger:hover { 
             background-color: var(--danger-hover); 
+        }
+        
+        .btn-edit { 
+            background-color: var(--edit-color); 
+        }
+        
+        .btn-edit:hover { 
+            background-color: var(--edit-hover); 
         }
         
         .message { 
@@ -643,15 +720,15 @@ if ($new_checklist_password && $viewing_checklist && $viewing_checklist['id'] ==
         }
         
         .password-warning {
-            background-color: var(--warning-bg);
-            border: 1px solid var(--warning-border);
-            color: var(--warning-text);
-            padding: 10px;
-            border-radius: 4px;
-            margin: 10px 0;
-            text-align: center;
-            font-weight: bold;
-        }
+			background-color: var(--error-bg);
+			border: 1px solid var(--error-border);
+			color: var(--error-text);
+			padding: 10px;
+			border-radius: 4px;
+			margin: 10px 0;
+			text-align: center;
+			font-weight: bold;
+		}
         
         .modal {
             display: none;
@@ -698,7 +775,44 @@ if ($new_checklist_password && $viewing_checklist && $viewing_checklist['id'] ==
     </div>
 
     <div class="container">
-        <?php if ($viewing_checklist): ?>
+        <?php if ($editing_checklist): ?>
+            <!-- Edit Checklist Page -->
+            <a href="index.php?id=<?php echo htmlspecialchars($editing_checklist['id']); ?>" class="back-link">← Back to Checklist</a>
+            
+            <h1>Edit Checklist</h1>
+            
+            <?php if (isset($message)): ?>
+                <div class="message success"><?php echo htmlspecialchars($message); ?></div>
+            <?php endif; ?>
+            
+            <?php if (isset($error)): ?>
+                <div class="message error"><?php echo htmlspecialchars($error); ?></div>
+            <?php endif; ?>
+            
+            <form method="POST">
+                <input type="hidden" name="action" value="edit_checklist">
+                <input type="hidden" name="checklist_id" value="<?php echo htmlspecialchars($editing_checklist['id']); ?>">
+                
+                <div class="form-group">
+                    <label for="title">Title:</label>
+                    <input type="text" id="title" name="title" value="<?php echo htmlspecialchars($editing_checklist['title']); ?>" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="items">Items (comma-separated):</label>
+                    <textarea id="items" name="items" placeholder="item1, item2, item3"><?php echo htmlspecialchars($editing_checklist['items_string']); ?></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Password (required to edit):</label>
+                    <input type="password" id="password" name="password" placeholder="Enter checklist password" required>
+                </div>
+                
+                <button type="submit" class="btn-edit">✏️ Apply Changes</button>
+                <a href="index.php?id=<?php echo htmlspecialchars($editing_checklist['id']); ?>" class="btn-primary">Cancel</a>
+            </form>
+
+        <?php elseif ($viewing_checklist): ?>
             <!-- Checklist View Page -->
             <a href="index.php" class="back-link">← Home</a>
             
@@ -765,13 +879,36 @@ if ($new_checklist_password && $viewing_checklist && $viewing_checklist['id'] ==
             <div class="actions-section">
                 <h3>Checklist Management</h3>
                 
+                <button type="button" class="btn-edit" onclick="showEditModal()">✏️ Edit Checklist</button>
                 <button type="button" class="btn-warning" onclick="showLockModal()">
                     <?php echo $viewing_checklist['locked'] ? '🔓 Unlock Checklist' : '🔒 Lock Checklist'; ?>
                 </button>
-                
                 <button type="button" class="btn-info" onclick="showResetModal()">🔄 Reset Checklist</button>
-                
                 <button type="button" class="btn-danger" onclick="showDeleteModal()">🗑️ Delete Checklist</button>
+            </div>
+            
+            <!-- Edit Modal -->
+            <div id="editModal" class="modal">
+                <div class="modal-content">
+                    <h3>Edit Checklist</h3>
+                    <p>To edit the checklist "<strong><?php echo htmlspecialchars($viewing_checklist['title']); ?></strong>", please enter the password.</p>
+                    <p>You will be able to change the title and items.</p>
+                    
+                    <div class="password-input">
+                        <label for="editPassword">Enter password to continue:</label>
+                        <input type="password" id="editPassword" name="password" placeholder="Enter checklist password" required>
+                    </div>
+                    
+                    <div class="modal-buttons">
+                        <form id="editForm" method="GET" style="display: inline;">
+                            <input type="hidden" name="id" value="<?php echo htmlspecialchars($viewing_checklist['id']); ?>">
+                            <input type="hidden" name="edit" value="1">
+                            <input type="hidden" name="password" id="hiddenEditPassword">
+                            <button type="button" onclick="submitEditForm()" class="btn-edit">Continue to Edit</button>
+                        </form>
+                        <button type="button" onclick="hideEditModal()">Cancel</button>
+                    </div>
+                </div>
             </div>
             
             <!-- Lock/Unlock Modal -->
@@ -954,6 +1091,31 @@ if ($new_checklist_password && $viewing_checklist && $viewing_checklist['id'] ==
                 // For now, the page will show updated status on next load
             }
             
+            // Edit modal functionality
+            function showEditModal() {
+                document.getElementById('editModal').style.display = 'block';
+                document.getElementById('editPassword').value = '';
+                document.getElementById('editPassword').focus();
+            }
+            
+            function hideEditModal() {
+                document.getElementById('editModal').style.display = 'none';
+            }
+            
+            function submitEditForm() {
+                const password = document.getElementById('editPassword').value;
+                if (!password) {
+                    alert('Please enter the password to edit this checklist.');
+                    return;
+                }
+                
+                // Set the password in the hidden field
+                document.getElementById('hiddenEditPassword').value = password;
+                
+                // Submit the form
+                document.getElementById('editForm').submit();
+            }
+            
             // Lock modal functionality
             function showLockModal() {
                 document.getElementById('lockModal').style.display = 'block';
@@ -1031,16 +1193,22 @@ if ($new_checklist_password && $viewing_checklist && $viewing_checklist['id'] ==
             
             // Close modals when clicking outside
             window.onclick = function(event) {
+                const editModal = document.getElementById('editModal');
                 const lockModal = document.getElementById('lockModal');
                 const resetModal = document.getElementById('resetModal');
                 const deleteModal = document.getElementById('deleteModal');
                 
+                if (event.target === editModal) hideEditModal();
                 if (event.target === lockModal) hideLockModal();
                 if (event.target === resetModal) hideResetModal();
                 if (event.target === deleteModal) hideDeleteModal();
             }
             
             // Allow pressing Enter to submit forms
+            document.getElementById('editPassword')?.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') submitEditForm();
+            });
+            
             document.getElementById('lockPassword')?.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') submitLockForm();
             });
