@@ -25,3 +25,6 @@
 
 Simply copy/paste (drag and drop) in to your server. Rename as you like. The rest is automatic!
 Note: If the database isn't being created, you may need to change chmod 0775 index.php
+
+
+# DISCLAIMER: Because I hadn't used php since ~2009, I used deepseek to modify/adjust/improve some parts of the script.
