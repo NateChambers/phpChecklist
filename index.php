@@ -182,6 +182,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
+// Handle clone request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'clone_checklist') {
+    $checklist_id = (int)$_POST['checklist_id'];
+    
+    try {
+        // Get current checklist data
+        $stmt = $pdo->prepare("SELECT title, items FROM checklists WHERE id = ?");
+        $stmt->execute([$checklist_id]);
+        $checklist = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($checklist) {
+            // Generate new random password (12 characters)
+            $new_password = substr(str_shuffle('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'), 0, 12);
+            
+            // Replace the 11th character with a random special character (more secure)
+            $specialChars = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+            $new_password[10] = $specialChars[random_int(0, strlen($specialChars) - 1)];
+            
+            // Reset all items to unchecked (0)
+            $items = json_decode($checklist['items'], true);
+            foreach ($items as $key => $value) {
+                $items[$key] = 0;
+            }
+            $new_items_json = json_encode($items);
+            
+            // Insert cloned checklist into database
+            $stmt = $pdo->prepare("INSERT INTO checklists (title, items, password) VALUES (?, ?, ?)");
+            $stmt->execute([$checklist['title'] . ' (Copy)', $new_items_json, $new_password]);
+            
+            // Get the ID of the newly created checklist
+            $new_checklist_id = $pdo->lastInsertId();
+            
+            // Store password in session to show on the next page
+            session_start();
+            $_SESSION['new_checklist_password'] = $new_password;
+            $_SESSION['new_checklist_id'] = $new_checklist_id;
+            
+            header('Location: index.php?id=' . $new_checklist_id . '&message=Checklist+cloned+successfully');
+            exit;
+        } else {
+            header('Location: index.php?error=Checklist+not+found');
+            exit;
+        }
+    } catch (PDOException $e) {
+        header('Location: index.php?error=Error+cloning+checklist:' . urlencode($e->getMessage()));
+        exit;
+    }
+}
+
 // Handle checkbox toggle via AJAX
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'toggle_item') {
     $checklist_id = (int)$_POST['checklist_id'];
@@ -864,6 +913,7 @@ if ($new_checklist_password && $viewing_checklist && $viewing_checklist['id'] ==
                     <?php echo $viewing_checklist['locked'] ? '🔓 Unlock Checklist' : '🔒 Lock Checklist'; ?>
                 </button>
                 <button type="button" class="btn-info" onclick="showResetModal()">🔄 Reset Checklist</button>
+				<button type="button" class="btn-primary" onclick="showCloneModal()">📋 Clone Checklist</button>
                 <button type="button" class="btn-danger" onclick="showDeleteModal()">🗑️ Delete Checklist</button>
             </div>
             
@@ -963,6 +1013,24 @@ if ($new_checklist_password && $viewing_checklist && $viewing_checklist['id'] ==
                     </div>
                 </div>
             </div>
+			
+			<!-- Clone Modal -->
+			<div id="cloneModal" class="modal">
+				<div class="modal-content">
+					<h3>Clone Checklist</h3>
+					<p>Are you sure you want to clone the checklist "<strong><?php echo htmlspecialchars($viewing_checklist['title']); ?></strong>"?</p>
+					<p>This will create a new checklist with the same title (with "Copy" added), same items (all unchecked), and a new password.</p>
+					
+					<div class="modal-buttons">
+						<form id="cloneForm" method="POST" style="display: inline;">
+							<input type="hidden" name="action" value="clone_checklist">
+							<input type="hidden" name="checklist_id" value="<?php echo htmlspecialchars($viewing_checklist['id']); ?>">
+							<button type="submit" class="btn-primary">Clone Checklist</button>
+						</form>
+						<button type="button" onclick="hideCloneModal()">Cancel</button>
+					</div>
+				</div>
+			</div>
             
             <script>
             // Theme functionality
@@ -1174,11 +1242,13 @@ if ($new_checklist_password && $viewing_checklist && $viewing_checklist['id'] ==
             // Close modals when clicking outside
             window.onclick = function(event) {
                 const editModal = document.getElementById('editModal');
+				const cloneModal = document.getElementById('cloneModal');
                 const lockModal = document.getElementById('lockModal');
                 const resetModal = document.getElementById('resetModal');
                 const deleteModal = document.getElementById('deleteModal');
                 
                 if (event.target === editModal) hideEditModal();
+				if (event.target === cloneModal) hideCloneModal();
                 if (event.target === lockModal) hideLockModal();
                 if (event.target === resetModal) hideResetModal();
                 if (event.target === deleteModal) hideDeleteModal();
@@ -1200,6 +1270,21 @@ if ($new_checklist_password && $viewing_checklist && $viewing_checklist['id'] ==
             document.getElementById('deletePassword')?.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') submitDeleteForm();
             });
+			
+			document.getElementById('clonePassword')?.addEventListener('keypress', function(e) {
+				if (e.key === 'Enter') submitCloneForm();
+			});
+			
+			// Clone modal functionality
+			function showCloneModal() {
+				document.getElementById('cloneModal').style.display = 'block';
+			}
+
+			function hideCloneModal() {
+				document.getElementById('cloneModal').style.display = 'none';
+			}
+
+			
             </script>
             
         <?php else: ?>
