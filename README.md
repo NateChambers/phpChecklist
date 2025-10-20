@@ -9,7 +9,8 @@
 - Lock checklist (requires checklist password)
 - Reset checklist (requires checklist password)
 - Delete checklist (requires checklist password)
-
+- Clone checklist
+  
 
 **SUGGESTIONS TO USERS**
 - It may be useful to create a cronjob (or windows scheduled task) to automatically backup the database on a regular basis.
