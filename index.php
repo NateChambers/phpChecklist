@@ -1,7 +1,6 @@
 <?php
 // Database setup
 $db_file = 'checklist.db';
-$create_table = false;
 
 // Create database connection
 try {
@@ -29,27 +28,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $password = trim($_POST['password']);
     
     try {
-        // Verify password before editing
-        $stmt = $pdo->prepare("SELECT password FROM checklists WHERE id = ?");
+        // Verify password before editing and get current items
+        $stmt = $pdo->prepare("SELECT password, items FROM checklists WHERE id = ?");
         $stmt->execute([$checklist_id]);
         $checklist = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if ($checklist) {
             if ($password === $checklist['password']) {
-                // Process items
-                $items_array = [];
+                // Get current items with their checked status
+                $current_items = json_decode($checklist['items'], true);
+                
+                // Process new items list
+                $new_items_array = [];
                 if (!empty($items_input)) {
                     $items_list = explode(',', $items_input);
                     foreach ($items_list as $item) {
                         $item_trimmed = trim($item);
                         if (!empty($item_trimmed)) {
-                            $items_array[$item_trimmed] = 0;
+                            // Preserve checked status if item exists, otherwise set to 0
+                            $new_items_array[$item_trimmed] = isset($current_items[$item_trimmed]) 
+                                ? $current_items[$item_trimmed] 
+                                : 0;
                         }
                     }
                 }
                 
                 // Convert to JSON
-                $items_json = json_encode($items_array);
+                $items_json = json_encode($new_items_array);
                 
                 // Update database
                 $stmt = $pdo->prepare("UPDATE checklists SET title = ?, items = ? WHERE id = ?");
