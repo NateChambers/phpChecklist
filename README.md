@@ -19,13 +19,13 @@
 **TODO**
 - More unique IDs, maybe uid instead of id?
 - Maybe an options variable for default theme, if dark theme not prefered it can easily be changed.
-- Edit mode to modify title and/or checklist
 
 
 **INSTRUCTIONS**
 
-Simply copy/paste (drag and drop) in to your server. Rename as you like. The rest is automatic!
-Note: If the database isn't being created, you may need to change chmod 0775 index.php
+- Simply copy/paste (drag and drop) in to your server. Rename as you like. The rest is automatic!
+- If you wish, there are 3 settings you can configure at the top of the file, the database file name, password length, and where the special char is in the password.
+- Note: If the database isn't being created, you may need to change chmod 0775 index.php
 
 
 # DISCLAIMER: Because I hadn't used php since ~2009, I used deepseek to modify/adjust/improve some parts of the script.
