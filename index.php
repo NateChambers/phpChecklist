@@ -1,6 +1,8 @@
 <?php
-// Database setup
+// Only edit variables here, if you wish.. be careful!
 $db_file = 'checklist.db';
+$password_length = 12;
+$password_special_char_index = $password_length - 1;
 
 // Create database connection
 try {
@@ -198,12 +200,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $checklist = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if ($checklist) {
-            // Generate new random password (12 characters)
-            $new_password = substr(str_shuffle('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'), 0, 12);
+            // Generate new random password
+            $new_password = substr(str_shuffle('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'), 0, $password_length);
             
             // Replace the 11th character with a random special character (more secure)
             $specialChars = '!@#$%^&*()_+-=[]{}|;:,.<>?';
-            $new_password[10] = $specialChars[random_int(0, strlen($specialChars) - 1)];
+            $new_password[$password_special_char_index-1] = $specialChars[random_int(0, strlen($specialChars) - 1)];
             
             // Reset all items to unchecked (0)
             $items = json_decode($checklist['items'], true);
