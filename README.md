@@ -28,4 +28,5 @@
 - Note: If the database isn't being created, you may need to change chmod 0775 index.php
 
 
-# DISCLAIMER: Because I hadn't used php since ~2009, I used deepseek to modify/adjust/improve some parts of the script.
+# DISCLAIMER: 
+Because I hadn't used php since ~2009 before starting this project, I used deepseek to modify/adjust/improve some parts of the script.
